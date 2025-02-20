@@ -65,4 +65,29 @@ class WeatherSDKTest extends BaseTest {
 
         Mockito.verify(spySDK, Mockito.times(1)).fetchWeather(city);
     }
+
+    @Test
+    @DisplayName("Should remove oldest city when more than 10 cities are added to cache")
+    void shouldRemoveOldestCityFromCache() throws IOException, InterruptedException {
+        WeatherSDK spySDK = Mockito.spy(new WeatherSDK(Mode.ON_DEMAND));
+
+        Mockito.doAnswer(invocation -> {
+            String city = invocation.getArgument(0);
+            return "weather for " + city;
+        }).when(spySDK).fetchWeather(Mockito.anyString());
+
+        // Add 11 cities to the cache
+        for (int i = 0; i < 11; i++) {
+            spySDK.getWeather("City" + i);
+        }
+
+        // When the 11th city is added, the oldest value (City0) should be removed
+        // Now, we request City0 again – if it was removed, fetchWeather will be called again
+        spySDK.getWeather("City0");
+
+        Mockito.verify(spySDK, Mockito.times(2)).fetchWeather("City0");
+
+        Mockito.verify(spySDK, Mockito.times(1)).fetchWeather("City10");
+    }
+
 }
