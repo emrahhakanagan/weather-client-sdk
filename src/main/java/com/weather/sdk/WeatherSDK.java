@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.weather.sdk.enums.Mode;
+import com.weather.sdk.model.WeatherData;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -24,7 +25,7 @@ public class WeatherSDK {
     private static final String CONFIG_FILE_PATH = "src/main/resources/config.properties";
     private final Mode mode;
 
-    private final Cache<String, String> cache = Caffeine.newBuilder()
+    private final Cache<String, WeatherData> cache = Caffeine.newBuilder()
             .expireAfterWrite(10, TimeUnit.MINUTES)
             .maximumSize(10)
             .build();
@@ -42,14 +43,13 @@ public class WeatherSDK {
         return this.apiKey;
     }
 
-    public String getWeather(String city) throws IOException, InterruptedException {
-        String cachedWeather = cache.getIfPresent(city);
+    public WeatherData getWeather(String city) throws IOException, InterruptedException {
+        WeatherData cachedWeather = cache.getIfPresent(city);
         if (cachedWeather != null) {
             return cachedWeather;
         }
 
-        // Вместо прямого HTTP-запроса вызываем fetchWeather:
-        String weatherData = fetchWeather(city);
+        WeatherData weatherData = fetchWeather(city);
 
         if (cache.estimatedSize() >= 10) {
             String oldestCity = cache.asMap().keySet().iterator().next();
@@ -68,7 +68,7 @@ public class WeatherSDK {
             System.out.println("Polling weather data...");
             for (String city : cache.asMap().keySet()) {
                 try {
-                    String weatherData = fetchWeather(city);
+                    WeatherData weatherData = fetchWeather(city);
                     cache.put(city, weatherData);
                     System.out.println("Updated weather for " + city);
                 } catch (IOException | InterruptedException e) {
@@ -78,7 +78,7 @@ public class WeatherSDK {
         }, 0, 10, TimeUnit.MINUTES);
     }
 
-    protected String fetchWeather(String city) throws IOException, InterruptedException {
+    protected WeatherData fetchWeather(String city) throws IOException, InterruptedException {
         String url = BASE_URL + "?q=" + city + "&appid=" + apiKey;
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -94,7 +94,24 @@ public class WeatherSDK {
             throw new IOException("Error fetching weather data: " + response.statusCode());
         }
 
-        return response.body();
+        JsonObject jsonResponse = JsonParser.parseString(response.body()).getAsJsonObject();
+
+        JsonObject main = jsonResponse.getAsJsonObject("main");
+        double temperature = main.get("temp").getAsDouble();
+        double feelsLike = main.get("feels_like").getAsDouble();
+        int visibility = jsonResponse.get("visibility").getAsInt();
+
+        JsonObject weather = jsonResponse.getAsJsonArray("weather").get(0).getAsJsonObject();
+        String description = weather.get("description").getAsString();
+
+        long datetime = jsonResponse.get("dt").getAsLong();
+        JsonObject sys = jsonResponse.getAsJsonObject("sys");
+        long sunrise = sys.get("sunrise").getAsLong();
+        long sunset = sys.get("sunset").getAsLong();
+        int timezone = jsonResponse.get("timezone").getAsInt();
+        String cityName = jsonResponse.get("name").getAsString();
+
+        return new WeatherData(temperature, feelsLike, visibility, description, datetime, sunrise, sunset, timezone, cityName);
     }
 
     private static String loadApiKey() {

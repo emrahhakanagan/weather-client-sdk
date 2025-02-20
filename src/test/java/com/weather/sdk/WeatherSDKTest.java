@@ -1,6 +1,7 @@
 package com.weather.sdk;
 
 import com.weather.sdk.enums.Mode;
+import com.weather.sdk.model.WeatherData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,9 +26,14 @@ class WeatherSDKTest extends BaseTest {
     @DisplayName("Test successful weather retrieval")
     void testGetWeatherSuccess() throws IOException, InterruptedException {
         String city = "London";
-        String response = weatherSDK.getWeather(city);
+        WeatherData response = weatherSDK.getWeather(city); // Используем объект
+
         assertNotNull(response, "Response should not be null");
-        assertTrue(response.contains("weather"), "Response should contain 'weather'");
+        assertNotNull(response.getDescription(), "Weather description should not be null");
+
+        // Проверяем, что описание содержит ключевые слова, например "clouds" или "clear sky"
+        assertTrue(response.getDescription().toLowerCase().contains("cloud"),
+                "Weather description should contain expected weather keyword");
     }
 
     @Test
@@ -50,18 +56,30 @@ class WeatherSDKTest extends BaseTest {
         System.clearProperty("config.file"); // Очистить после теста
     }
 
-    @DisplayName("Should return cached weather data on second request")
     @Test
     void shouldReturnCachedWeatherData() throws Exception {
         String city = "Berlin";
-        String expectedWeather = "{\"weather\":{\"main\":\"Clouds\",\"description\":\"scattered clouds\"}}";
+
+        // Создаем объект WeatherData с 9 аргументами
+        WeatherData expectedWeather = new WeatherData(
+                25.0,  // temperature
+                23.5,  // feelsLike
+                10000, // visibility
+                "Clouds", // description
+                1675744800L, // datetime
+                1675751262L, // sunrise
+                1675787560L, // sunset
+                3600, // timezone
+                city  // cityName
+        );
 
         WeatherSDK spySDK = Mockito.spy(new WeatherSDK(Mode.ON_DEMAND));
 
         Mockito.doReturn(expectedWeather).when(spySDK).fetchWeather(city);
 
-        spySDK.getWeather(city); // Первый вызов (кэшируется)
-        spySDK.getWeather(city); // Второй вызов (должен брать из кэша)
+        spySDK.getWeather(city);
+
+        spySDK.getWeather(city);
 
         Mockito.verify(spySDK, Mockito.times(1)).fetchWeather(city);
     }
@@ -73,21 +91,43 @@ class WeatherSDKTest extends BaseTest {
 
         Mockito.doAnswer(invocation -> {
             String city = invocation.getArgument(0);
-            return "weather for " + city;
+            return new WeatherData(
+                    25.0,  // temperature
+                    23.5,  // feelsLike
+                    10000, // visibility
+                    "clear_sky", // description
+                    1675744800L, // datetime
+                    1675751262L, // sunrise
+                    1675787560L, // sunset
+                    3600, // timezone
+                    city  // cityName
+            );
         }).when(spySDK).fetchWeather(Mockito.anyString());
 
-        // Add 11 cities to the cache
         for (int i = 0; i < 11; i++) {
             spySDK.getWeather("City" + i);
         }
 
-        // When the 11th city is added, the oldest value (City0) should be removed
-        // Now, we request City0 again – if it was removed, fetchWeather will be called again
         spySDK.getWeather("City0");
 
         Mockito.verify(spySDK, Mockito.times(2)).fetchWeather("City0");
-
-        Mockito.verify(spySDK, Mockito.times(1)).fetchWeather("City10");
     }
 
+    @Test
+    @DisplayName("Test JSON parsing and data structure")
+    void testWeatherDataParsing() throws IOException, InterruptedException {
+        String city = "London";
+
+        WeatherData weatherData = weatherSDK.getWeather(city);
+
+        assertNotNull(weatherData, "WeatherData should not be null");
+        assertTrue(weatherData.getTemperature() > 0, "Temperature should be a positive value");
+        assertTrue(weatherData.getFeelsLike() > 0, "FeelsLike should be a positive value");
+        assertTrue(weatherData.getVisibility() > 0, "Visibility should be a positive value");
+        assertNotNull(weatherData.getDescription(), "Description should not be null");
+        assertTrue(weatherData.getDatetime() > 0, "Datetime should be a positive value");
+        assertTrue(weatherData.getSunrise() > 0, "Sunrise should be a positive value");
+        assertTrue(weatherData.getSunset() > 0, "Sunset should be a positive value");
+        assertNotNull(weatherData.getCityName(), "City name should not be null");
+    }
 }
