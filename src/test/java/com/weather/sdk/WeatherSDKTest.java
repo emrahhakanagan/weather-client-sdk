@@ -9,7 +9,9 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -19,7 +21,8 @@ class WeatherSDKTest extends BaseTest {
     @DisplayName("Test API key initialization")
     void testApiKeyInitialization() {
         assertNotNull(weatherSDK.getApiKey(), "API key should not be null");
-        assertEquals("1f15183e78544e303ccdc80eadfa7b5a", weatherSDK.getApiKey(), "API key should match the mocked value");
+        assertEquals("1f15183e78544e303ccdc80eadfa7b5a", weatherSDK.getApiKey(),
+                "API key should match the mocked value");
     }
 
     @Test
@@ -31,7 +34,6 @@ class WeatherSDKTest extends BaseTest {
         assertNotNull(response, "Response should not be null");
         assertNotNull(response.getDescription(), "Weather description should not be null");
 
-        // Проверяем, что описание содержит ключевые слова, например "clouds" или "clear sky"
         assertTrue(response.getDescription().toLowerCase().contains("cloud"),
                 "Weather description should contain expected weather keyword");
     }
@@ -50,7 +52,10 @@ class WeatherSDKTest extends BaseTest {
     void shouldThrowExceptionWhenApiKeyIsMissing() {
         System.setProperty("config.file", "src/test/resources/config-test-empty-key.properties");
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> new WeatherSDK(Mode.ON_DEMAND));
+        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+                new WeatherSDK(Mode.ON_DEMAND, 10, TimeUnit.MINUTES) // Передаем три аргумента
+        );
+
         assertEquals("API key is required", exception.getMessage());
 
         System.clearProperty("config.file"); // Очистить после теста
@@ -60,7 +65,6 @@ class WeatherSDKTest extends BaseTest {
     void shouldReturnCachedWeatherData() throws Exception {
         String city = "Berlin";
 
-        // Создаем объект WeatherData с 9 аргументами
         WeatherData expectedWeather = new WeatherData(
                 25.0,  // temperature
                 23.5,  // feelsLike
@@ -104,7 +108,6 @@ class WeatherSDKTest extends BaseTest {
             );
         }).when(spySDK).fetchWeather(Mockito.anyString());
 
-        // Добавляем 11 городов в кэш
         for (int i = 0; i < 11; i++) {
             spySDK.getWeather("City" + i);
         }
@@ -113,7 +116,6 @@ class WeatherSDKTest extends BaseTest {
 
         Mockito.verify(spySDK, Mockito.times(2)).fetchWeather("City0");
     }
-
 
     @Test
     @DisplayName("Test JSON parsing and data structure")
@@ -132,4 +134,42 @@ class WeatherSDKTest extends BaseTest {
         assertTrue(weatherData.getSunset() > 0, "Sunset should be a positive value");
         assertNotNull(weatherData.getCityName(), "City name should not be null");
     }
+
+    @Test
+    @DisplayName("Should update weather data in POLLING mode")
+    void shouldUpdateWeatherDataInPollingMode() throws IOException, InterruptedException {
+        String city = "Berlin";
+
+        WeatherData initialWeather = new WeatherData(
+                20.0, 18.5, 10000, "clear sky",
+                1675744800L, 1675751262L, 1675787560L, 3600, city
+        );
+
+        WeatherData updatedWeather = new WeatherData(
+                25.0, 22.5, 9000, "rainy",
+                1675745800L, 1675752262L, 1675788560L, 3600, city
+        );
+
+        WeatherSDK spySDK = Mockito.spy(weatherSDK);
+
+        Mockito.doReturn(initialWeather)
+                .doReturn(updatedWeather)
+                .when(spySDK).fetchWeather(city);
+
+        spySDK.getWeather(city);
+
+        spySDK.startPolling(2, TimeUnit.SECONDS);
+
+        await().atMost(5, TimeUnit.SECONDS).until(() ->
+                spySDK.getWeather(city).getTemperature() == 25.0
+        );
+
+        WeatherData latestWeather = spySDK.getWeather(city);
+        assertEquals(25.0, latestWeather.getTemperature(),
+                "Temperature should be updated by polling");
+        assertEquals("rainy", latestWeather.getDescription(),
+                "Weather description should be updated by polling");
+    }
+
+
 }

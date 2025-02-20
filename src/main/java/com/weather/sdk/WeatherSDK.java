@@ -27,6 +27,7 @@ public class WeatherSDK {
     private static final String CONFIG_FILE_PATH = "src/main/resources/config.properties";
     private final Mode mode;
     private static final Map<String, WeatherSDK> instances = new HashMap<>();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
 
     private final Cache<String, WeatherData> cache = Caffeine.newBuilder()
@@ -34,19 +35,18 @@ public class WeatherSDK {
             .maximumSize(10)
             .build();
 
-    public WeatherSDK(Mode mode) {
+    public WeatherSDK(Mode mode, long pollingInterval, TimeUnit unit) {
         this.apiKey = loadApiKey();
 
-        // Проверяем, существует ли уже SDK с этим API-ключом
         if (instances.containsKey(apiKey)) {
             throw new IllegalStateException("An instance of WeatherSDK with this API key already exists.");
         }
 
         this.mode = mode;
-        instances.put(apiKey, this); // Сохраняем экземпляр в Map
+        instances.put(apiKey, this);
 
         if (this.mode == Mode.POLLING) {
-            startPolling();
+            startPolling(pollingInterval, unit);
         }
     }
 
@@ -72,9 +72,7 @@ public class WeatherSDK {
         return weatherData;
     }
 
-
-    private void startPolling() {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    void startPolling(long interval, TimeUnit unit) {
         scheduler.scheduleAtFixedRate(() -> {
             System.out.println("Polling weather data...");
             for (String city : cache.asMap().keySet()) {
@@ -86,7 +84,7 @@ public class WeatherSDK {
                     System.err.println("Failed to update weather for " + city);
                 }
             }
-        }, 0, 10, TimeUnit.MINUTES);
+        }, 0, interval, unit);
     }
 
     protected WeatherData fetchWeather(String city) throws IOException, InterruptedException {

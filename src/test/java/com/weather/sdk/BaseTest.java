@@ -6,13 +6,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.concurrent.TimeUnit;
 
 @ExtendWith(MockitoExtension.class)
 public abstract class BaseTest {
 
-    @InjectMocks
     protected WeatherSDK weatherSDK;
 
     @BeforeAll
@@ -24,7 +24,7 @@ public abstract class BaseTest {
     @DisplayName("Setup mock API key before each test")
     void setUp() {
         WeatherSDK.clearInstances();
-        weatherSDK = new WeatherSDK(Mode.ON_DEMAND);
+        weatherSDK = new WeatherSDK(Mode.ON_DEMAND, 2, TimeUnit.SECONDS);
     }
 
     @AfterEach
