@@ -14,6 +14,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -24,6 +26,8 @@ public class WeatherSDK {
     private static final String BASE_URL = "https://api.openweathermap.org/data/2.5/weather";
     private static final String CONFIG_FILE_PATH = "src/main/resources/config.properties";
     private final Mode mode;
+    private static final Map<String, WeatherSDK> instances = new HashMap<>();
+
 
     private final Cache<String, WeatherData> cache = Caffeine.newBuilder()
             .expireAfterWrite(10, TimeUnit.MINUTES)
@@ -31,8 +35,15 @@ public class WeatherSDK {
             .build();
 
     public WeatherSDK(Mode mode) {
-        this.mode = mode;
         this.apiKey = loadApiKey();
+
+        // Проверяем, существует ли уже SDK с этим API-ключом
+        if (instances.containsKey(apiKey)) {
+            throw new IllegalStateException("An instance of WeatherSDK with this API key already exists.");
+        }
+
+        this.mode = mode;
+        instances.put(apiKey, this); // Сохраняем экземпляр в Map
 
         if (this.mode == Mode.POLLING) {
             startPolling();
@@ -128,6 +139,12 @@ public class WeatherSDK {
             return apiKey;
         } catch (IOException e) {
             throw new RuntimeException("Failed to load API key", e);
+        }
+    }
+
+    public static void clearInstances() {
+        synchronized (instances) {
+            instances.clear();
         }
     }
 }
