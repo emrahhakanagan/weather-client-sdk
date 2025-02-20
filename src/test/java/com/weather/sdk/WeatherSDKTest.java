@@ -1,18 +1,17 @@
 package com.weather.sdk;
 
+import com.weather.sdk.enums.Mode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
 import java.io.IOException;
-import java.util.Properties;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherSDKTest extends BaseTest {
-    @Mock
-    private Properties mockProperties; // Теперь это поле будет мокироваться автоматически
 
     @Test
     @DisplayName("Test API key initialization")
@@ -44,7 +43,7 @@ class WeatherSDKTest extends BaseTest {
     void shouldThrowExceptionWhenApiKeyIsMissing() {
         System.setProperty("config.file", "src/test/resources/config-test-empty-key.properties");
 
-        Exception exception = assertThrows(IllegalArgumentException.class, WeatherSDK::new);
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> new WeatherSDK(Mode.ON_DEMAND));
         assertEquals("API key is required", exception.getMessage());
 
         System.clearProperty("config.file"); // Очистить после теста
