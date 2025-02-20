@@ -73,7 +73,7 @@ class WeatherSDKTest extends BaseTest {
                 city  // cityName
         );
 
-        WeatherSDK spySDK = Mockito.spy(new WeatherSDK(Mode.ON_DEMAND));
+        WeatherSDK spySDK = Mockito.spy(weatherSDK);
 
         Mockito.doReturn(expectedWeather).when(spySDK).fetchWeather(city);
 
@@ -87,23 +87,24 @@ class WeatherSDKTest extends BaseTest {
     @Test
     @DisplayName("Should remove oldest city when more than 10 cities are added to cache")
     void shouldRemoveOldestCityFromCache() throws IOException, InterruptedException {
-        WeatherSDK spySDK = Mockito.spy(new WeatherSDK(Mode.ON_DEMAND));
+        WeatherSDK spySDK = Mockito.spy(weatherSDK);
 
         Mockito.doAnswer(invocation -> {
             String city = invocation.getArgument(0);
             return new WeatherData(
-                    25.0,  // temperature
-                    23.5,  // feelsLike
-                    10000, // visibility
+                    25.0,      // temperature
+                    23.5,      // feelsLike
+                    10000,     // visibility
                     "clear_sky", // description
                     1675744800L, // datetime
                     1675751262L, // sunrise
                     1675787560L, // sunset
-                    3600, // timezone
-                    city  // cityName
+                    3600,      // timezone
+                    city       // cityName
             );
         }).when(spySDK).fetchWeather(Mockito.anyString());
 
+        // Добавляем 11 городов в кэш
         for (int i = 0; i < 11; i++) {
             spySDK.getWeather("City" + i);
         }
@@ -112,6 +113,7 @@ class WeatherSDKTest extends BaseTest {
 
         Mockito.verify(spySDK, Mockito.times(2)).fetchWeather("City0");
     }
+
 
     @Test
     @DisplayName("Test JSON parsing and data structure")
