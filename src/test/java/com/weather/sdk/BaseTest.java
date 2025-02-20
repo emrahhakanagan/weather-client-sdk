@@ -1,5 +1,6 @@
 package com.weather.sdk;
 
+import com.weather.sdk.enums.Mode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -16,7 +17,7 @@ public abstract class BaseTest {
     @BeforeEach
     @DisplayName("Setup mock API key before each test")
     void setUp() {
-        weatherSDK = new WeatherSDK();
+        weatherSDK = new WeatherSDK(Mode.ON_DEMAND);
     }
 
     @AfterEach
