@@ -4,6 +4,7 @@ import com.weather.sdk.enums.Mode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
@@ -47,5 +48,21 @@ class WeatherSDKTest extends BaseTest {
         assertEquals("API key is required", exception.getMessage());
 
         System.clearProperty("config.file"); // Очистить после теста
+    }
+
+    @DisplayName("Should return cached weather data on second request")
+    @Test
+    void shouldReturnCachedWeatherData() throws Exception {
+        String city = "Berlin";
+        String expectedWeather = "{\"weather\":{\"main\":\"Clouds\",\"description\":\"scattered clouds\"}}";
+
+        WeatherSDK spySDK = Mockito.spy(new WeatherSDK(Mode.ON_DEMAND));
+
+        Mockito.doReturn(expectedWeather).when(spySDK).fetchWeather(city);
+
+        spySDK.getWeather(city); // Первый вызов (кэшируется)
+        spySDK.getWeather(city); // Второй вызов (должен брать из кэша)
+
+        Mockito.verify(spySDK, Mockito.times(1)).fetchWeather(city);
     }
 }

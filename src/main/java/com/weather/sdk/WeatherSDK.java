@@ -26,7 +26,7 @@ public class WeatherSDK {
 
     private final Cache<String, String> cache = Caffeine.newBuilder()
             .expireAfterWrite(10, TimeUnit.MINUTES)
-            .maximumSize(100)
+            .maximumSize(10)
             .build();
 
     public WeatherSDK(Mode mode) {
@@ -48,26 +48,19 @@ public class WeatherSDK {
             return cachedWeather;
         }
 
-        String url = BASE_URL + "?q=" + city + "&appid=" + apiKey + "&units=metric";
+        // Вместо прямого HTTP-запроса вызываем fetchWeather:
+        String weatherData = fetchWeather(city);
 
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .GET()
-                .build();
-
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        if (response.statusCode() != 200) {
-            throw new IOException("Error fetching weather data: " + response.statusCode());
+        if (cache.estimatedSize() >= 10) {
+            String oldestCity = cache.asMap().keySet().iterator().next();
+            cache.invalidate(oldestCity);
+            System.out.println("Removed oldest city from cache: " + oldestCity);
         }
-
-        JsonObject jsonResponse = JsonParser.parseString(response.body()).getAsJsonObject();
-        String weatherData = jsonResponse.toString();
 
         cache.put(city, weatherData);
         return weatherData;
     }
+
 
     private void startPolling() {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
@@ -85,7 +78,7 @@ public class WeatherSDK {
         }, 0, 10, TimeUnit.MINUTES);
     }
 
-    private String fetchWeather(String city) throws IOException, InterruptedException {
+    protected String fetchWeather(String city) throws IOException, InterruptedException {
         String url = BASE_URL + "?q=" + city + "&appid=" + apiKey;
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -98,7 +91,7 @@ public class WeatherSDK {
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
         if (response.statusCode() != 200) {
-            throw new IOException("Failed to fetch weather data: " + response.statusCode());
+            throw new IOException("Error fetching weather data: " + response.statusCode());
         }
 
         return response.body();
