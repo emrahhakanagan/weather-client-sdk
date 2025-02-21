@@ -4,7 +4,10 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
 import com.weather.sdk.enums.Mode;
+import com.weather.sdk.exception.WeatherSDKException;
+import com.weather.sdk.exception.WeatherSDKExceptionHandler;
 import com.weather.sdk.model.WeatherData;
 
 import java.io.FileInputStream;
@@ -80,47 +83,59 @@ public class WeatherSDK {
                     WeatherData weatherData = fetchWeather(city);
                     cache.put(city, weatherData);
                     System.out.println("Updated weather for " + city);
-                } catch (IOException | InterruptedException e) {
-                    System.err.println("Failed to update weather for " + city);
+                } catch (WeatherSDKException e) {
+                    WeatherSDKExceptionHandler.handleException(e);
                 }
             }
         }, 0, interval, unit);
     }
 
-    protected WeatherData fetchWeather(String city) throws IOException, InterruptedException {
+    protected WeatherData fetchWeather(String city) throws WeatherSDKException {
         String url = BASE_URL + "?q=" + city + "&appid=" + apiKey;
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(5))
-                .GET()
-                .build();
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(5))
+                    .GET()
+                    .build();
 
-        HttpClient client = HttpClient.newHttpClient();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpClient client = HttpClient.newHttpClient();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        if (response.statusCode() != 200) {
-            throw new IOException("Error fetching weather data: " + response.statusCode());
+            if (response.statusCode() != 200) {
+                throw new WeatherSDKException("Error fetching weather data: " + response.statusCode());
+            }
+
+            JsonObject jsonResponse = JsonParser.parseString(response.body()).getAsJsonObject();
+
+            JsonObject main = jsonResponse.getAsJsonObject("main");
+            double temperature = main.get("temp").getAsDouble();
+            double feelsLike = main.get("feels_like").getAsDouble();
+            int visibility = jsonResponse.get("visibility").getAsInt();
+
+            JsonObject weather = jsonResponse.getAsJsonArray("weather").get(0).getAsJsonObject();
+            String description = weather.get("description").getAsString();
+
+            long datetime = jsonResponse.get("dt").getAsLong();
+            JsonObject sys = jsonResponse.getAsJsonObject("sys");
+            long sunrise = sys.get("sunrise").getAsLong();
+            long sunset = sys.get("sunset").getAsLong();
+            int timezone = jsonResponse.get("timezone").getAsInt();
+            String cityName = jsonResponse.get("name").getAsString();
+
+            return new WeatherData(temperature, feelsLike, visibility, description, datetime, sunrise, sunset, timezone, cityName);
+
+        } catch (IOException | InterruptedException e) {
+            WeatherSDKExceptionHandler.handleException(e);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new WeatherSDKException("Failed to fetch weather data for " + city, e);
+        } catch (JsonSyntaxException e) {
+            WeatherSDKExceptionHandler.handleException(e);
+            throw new WeatherSDKException("Failed to parse weather data for " + city, e);
         }
-
-        JsonObject jsonResponse = JsonParser.parseString(response.body()).getAsJsonObject();
-
-        JsonObject main = jsonResponse.getAsJsonObject("main");
-        double temperature = main.get("temp").getAsDouble();
-        double feelsLike = main.get("feels_like").getAsDouble();
-        int visibility = jsonResponse.get("visibility").getAsInt();
-
-        JsonObject weather = jsonResponse.getAsJsonArray("weather").get(0).getAsJsonObject();
-        String description = weather.get("description").getAsString();
-
-        long datetime = jsonResponse.get("dt").getAsLong();
-        JsonObject sys = jsonResponse.getAsJsonObject("sys");
-        long sunrise = sys.get("sunrise").getAsLong();
-        long sunset = sys.get("sunset").getAsLong();
-        int timezone = jsonResponse.get("timezone").getAsInt();
-        String cityName = jsonResponse.get("name").getAsString();
-
-        return new WeatherData(temperature, feelsLike, visibility, description, datetime, sunrise, sunset, timezone, cityName);
     }
 
     private static String loadApiKey() {
@@ -132,11 +147,12 @@ public class WeatherSDK {
             String apiKey = properties.getProperty("api.key", "").trim();
 
             if (apiKey.isEmpty()) {
-                throw new IllegalArgumentException("API key is required");
+                throw new WeatherSDKException("API key is required");
             }
             return apiKey;
         } catch (IOException e) {
-            throw new RuntimeException("Failed to load API key", e);
+            WeatherSDKExceptionHandler.handleException(e);
+            throw new WeatherSDKException("Failed to load API key", e);
         }
     }
 
