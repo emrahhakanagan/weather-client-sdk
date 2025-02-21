@@ -1,6 +1,7 @@
 package com.weather.sdk;
 
 import com.weather.sdk.enums.Mode;
+import com.weather.sdk.exception.WeatherSDKException;
 import com.weather.sdk.model.WeatherData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,7 @@ class WeatherSDKTest extends BaseTest {
     @Test
     @DisplayName("Should throw exception when city is invalid")
     void shouldThrowExceptionWhenCityIsInvalid() {
-        Exception exception = assertThrows(IOException.class, () ->
+        Exception exception = assertThrows(WeatherSDKException.class, () ->
                 weatherSDK.getWeather("InvalidCity"));
         assertTrue(exception.getMessage().contains("Error fetching weather data"),
                 "Exception message should contain expected error text");
@@ -52,7 +53,7 @@ class WeatherSDKTest extends BaseTest {
     void shouldThrowExceptionWhenApiKeyIsMissing() {
         System.setProperty("config.file", "src/test/resources/config-test-empty-key.properties");
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+        Exception exception = assertThrows(WeatherSDKException.class, () ->
                 new WeatherSDK(Mode.ON_DEMAND, 10, TimeUnit.MINUTES) // Передаем три аргумента
         );
 
@@ -170,6 +171,4 @@ class WeatherSDKTest extends BaseTest {
         assertEquals("rainy", latestWeather.getDescription(),
                 "Weather description should be updated by polling");
     }
-
-
 }
